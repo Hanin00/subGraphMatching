@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric.nn as pyg_nn
 import torch_geometric.utils as pyg_utils
+import sys
 
 
 class BaselineMLP(nn.Module):
@@ -195,7 +196,16 @@ class SkipLastGNN(nn.Module):
                 x = self.convs[i](x, edge_index)
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
-            emb = torch.cat((emb, x), 1)    # torch.Size([539, 128])
+
+            # print(x)
+            # print(emb)   #
+            # print("emb : ", emb.size())
+            # print("x : ", x.size())
+            
+            emb = torch.cat((emb, x), 1)    # torch.Size([539, 128]) <- 
+            # print("after concat : ",emb.size())
+
+            # emb = torch.cat((emb, x), 1)    # torch.Size([539, 128])
             if self.skip == 'learnable':
                 # torch.Size([539, 2, 64])
                 all_emb = torch.cat((all_emb, x.unsqueeze(1)), 1)

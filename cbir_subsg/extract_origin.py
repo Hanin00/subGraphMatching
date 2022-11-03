@@ -133,7 +133,7 @@ def load_dataset(max_node, R_BFS):
     # query = subgraph.make_subgraph(datas[query_number], max_node, False, True)
 
     # user-defined query images
-    with open("data/query_road_0819.pickle", "rb") as q:
+    with open("data/query_1028.pickle", "rb") as q:
         querys = pickle.load(q)
         query = subgraph.make_subgraph(querys[0], max_node, False, False)
         query_number = 1
