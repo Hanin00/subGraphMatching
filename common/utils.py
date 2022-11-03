@@ -240,7 +240,7 @@ def build_optimizer(args, params):
 
 
 def batch_nx_graphs(graphs, anchors=None):
-    # motifs_batch = [pyg_utils.from_networkx(
+    # motifs_batch = [pyg_utils.from_networdkx(
     #    nx.convert_node_labels_to_integers(graph)) for graph in graphs]
     #loader = DataLoader(motifs_batch, batch_size=len(motifs_batch))
     #for b in loader: batch = b
@@ -255,6 +255,29 @@ def batch_nx_graphs(graphs, anchors=None):
                 g.nodes[v]["f0"]])
 
     batch = Batch.from_data_list([DSGraph(g) for g in graphs])
+    batch = batch.to(get_device())
+    # print(batch)
+    return batch
+
+
+
+def batch_nx_graphs2(graph, anchors=None):
+    # motifs_batch = [pyg_utils.from_networdkx(
+    #    nx.convert_node_labels_to_integers(graph)) for graph in graphs]
+    #loader = DataLoader(motifs_batch, batch_size=len(motifs_batch))
+    #for b in loader: batch = b
+    if anchors is not None:
+        for anchor, g in zip(anchors, graphs):
+            for v in g.nodes:
+                g.nodes[v]["node_feature"] = torch.tensor([float(v == anchor)])
+
+    # for g in graphs:
+    for v in graph.nodes:
+        graph.nodes[v]["node_feature"] = torch.tensor([
+            graph.nodes[v]["f0"]])
+
+    batch = Batch.from_data_list([DSGraph(graph) ])
+    # batch = Batch.from_data_list([DSGraph(g) for g in graphs])
     batch = batch.to(get_device())
     # print(batch)
     return batch
