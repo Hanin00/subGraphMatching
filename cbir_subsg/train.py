@@ -7,7 +7,7 @@ import torch.optim as optim
 import torch.nn as nn
 import torch
 from sklearn.manifold import TSNE
-import os
+import os, sys
 import argparse
 
 
@@ -43,8 +43,6 @@ def train(args, model, dataset, data_source):
     model.zero_grad()   # 학습하기위한 Grad 저장할 변수 초기화
     pos_a, pos_b, pos_label = data_source.gen_batch(
         dataset, True)
-    print(pos_a)
-    sys.exit()
 
     emb_as, emb_bs = model.emb_model(pos_a), model.emb_model(pos_b)
     labels = torch.tensor(pos_label).to(utils.get_device())
