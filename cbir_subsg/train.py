@@ -29,7 +29,6 @@ def make_data_source(args):
         data_source = data.SceneDataSource("scene")
     return data_source
 
-
 def train(args, model, dataset, data_source):
     """Train the embedding model.
     args: Commandline arguments
@@ -44,6 +43,8 @@ def train(args, model, dataset, data_source):
     model.zero_grad()   # 학습하기위한 Grad 저장할 변수 초기화
     pos_a, pos_b, pos_label = data_source.gen_batch(
         dataset, True)
+    print(pos_a)
+    sys.exit()
 
     emb_as, emb_bs = model.emb_model(pos_a), model.emb_model(pos_b)
     labels = torch.tensor(pos_label).to(utils.get_device())
@@ -88,7 +89,7 @@ def train_loop(args):
 
     val = []
     batch_n = 0
-    epoch = 1
+    epoch = 1000000
     for e in range(epoch):
         for dataset in loaders:
             if args.test:
@@ -108,8 +109,7 @@ def train_loop(args):
 
         if not args.test:
             print("Saving {}".format(args.model_path[:-5]+"_e"+str(e+1)+".pt"))
-            torch.save(model.state_dict(),
-                       args.model_path[:-5]+"_e"+str(e+1)+".pt")
+            torch.save(model.state_dict(),  args.model_path[:-5]+"_e"+str(e+1)+".pt")
         else:
             print(len(loaders))
             print(sum(val)/len(loaders))

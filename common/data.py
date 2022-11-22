@@ -27,8 +27,23 @@ from common import utils
 
 from astar_ged.src.distance import ged, normalized_ged
 
+import time
+import sys
+import multiprocessing as mp
+ 
+def mkDataset(path,flist, q, max_row_per_worker) : 
+    dataset = [[], [], []]
+    for idx in range(max_row_per_worker) :     
+        dataPath = path + flist[q.get()+idx] # datapath
+        print("dataPath : ",dataPath)
+        with open(dataPath, "rb") as fr:
+            tmp = pickle.load(fr)
+            for i in range(0, len(tmp[0])):
+                dataset[0].append(tmp[0][i])
+                dataset[1].append(tmp[1][i])
+                dataset[2].append(tmp[2][i])
 
-
+    return dataset
 
 def load_dataset(name):
     """ Load real-world datasets, available in PyTorch Geometric.
@@ -85,17 +100,132 @@ def load_dataset(name):
     #     return dataset
 
     # 검증 데이터 셋
+    # elif name == "scene":
+    #     dataset = [[], [], []]
+    #     for foldername in os.listdir('common/data/DB_dataset_ver3_100000/'):
+    #         for filename in os.listdir('common/data/DB_dataset_ver3_100000/'+foldername):
+    #             with open("common/data/DB_dataset_ver3_100000/"+foldername+"/"+filename, "rb") as fr:
+    #                 tmp = pickle.load(fr)
+    #                 for i in range(0, len(tmp[0]), 64):
+    #                     dataset[0].append(tmp[0][i])
+    #                     dataset[1].append(tmp[1][i])
+    #                     dataset[2].append(tmp[2][i])
+    #     return dataset
+
+    # 1번 또는 7번에서 인코딩 문제 발생하고 있음
+    # elif name == "scene":
+    #     dataset = [[], [], []]
+    #     loadstart_data = time.time()
+    #     for filename in os.listdir('common/data/trainDataset/v3_x1003'):
+    #         try : 
+    #             with open("common/data/trainDataset/v3_x1003/"+filename, "rb", ) as fr:
+    #                 tmp = pickle.load(fr)
+    #                 print(filename)
+    #                 for i in range(0, len(tmp[0]), 64):
+    #                     print(i)
+    #                     dataset[0].append(tmp[0][i])
+    #                     dataset[1].append(tmp[1][i])
+    #                     dataset[2].append(tmp[2][i])
+    #         except :  
+    #             print("filename : ", filename)
+    #             print("filename : ", filename)
+    #             print("filename : ", filename)
+    #             print("filename : ", filename)
+    #             with open("common/data/trainDataset/v3_x1003/"+filename, "r", encoding='utf-8') as fr:
+    #                 tmp = pickle.load(fr)
+    #                 print("except : ", filename)
+    #                 for i in range(0, len(tmp[0]), 64):
+    #                     print(i)
+    #                     dataset[0].append(tmp[0][i])
+    #                     dataset[1].append(tmp[1][i])
+    #                     dataset[2].append(tmp[2][i])
+    
+
+    # elif name == "scene":
+    #     dataset = [[], [], []]
+    #     loadstart_data = time.time()
+    #     for foldername in os.listdir('common/data/trainDataset/'):
+    #         print("foldername : ",foldername)
+    #         for filename in os.listdir('common/data/trainDataset/'+foldername):
+    #             try : 
+    #                 with open("common/data/trainDataset/"+foldername+"/"+filename, "rb", ) as fr:
+    #                     tmp = pickle.load(fr)
+    #                     print(filename)
+    #                     for i in range(0, len(tmp[0]), 64):
+    #                         print(i)
+    #                         dataset[0].append(tmp[0][i])
+    #                         dataset[1].append(tmp[1][i])
+    #                         dataset[2].append(tmp[2][i])
+
+    #             except : 
+    #                 print(foldername, " : ", filename)
+    #                 print(foldername, " : ", filename)
+    #                 print(foldername, " : ", filename)
+    #                 continue
+
+
+                    # with open("common/data/trainDataset/"+foldername+"/"+filename, "rb", encoding='utf') as fr:
+                    #     tmp = pickle.load(fr)
+                    #     print("except : ", filename)
+                    #     for i in range(0, len(tmp[0]), 64):
+                    #         print(i)
+                    #         dataset[0].append(tmp[0][i])
+                    #         dataset[1].append(tmp[1][i])
+                    #         dataset[2].append(tmp[2][i])
+    #일단 6만번대 데이터dptj 100개 데이터에 대해서만 gpu 프로세싱 붙여보기
+    #이 부분 불러들이는 것도 멀티 프로세싱..
     elif name == "scene":
         dataset = [[], [], []]
-        for foldername in os.listdir('common/data/DB_dataset_ver3_100000/'):
-            for filename in os.listdir('common/data/DB_dataset_ver3_100000/'+foldername):
-                with open("common/data/DB_dataset_ver3_100000/"+foldername+"/"+filename, "rb") as fr:
-                    tmp = pickle.load(fr)
-                    for i in range(0, len(tmp[0]), 64):
-                        dataset[0].append(tmp[0][i])
-                        dataset[1].append(tmp[1][i])
-                        dataset[2].append(tmp[2][i])
+        loadstart_data = time.time()
+        flist = os.listdir('common/data/merge/')
+
+        flist = flist[:10]
+
+        # flist 내에서 구간을 나눠서 처리할 수 있도록
+        mp.set_start_method('spawn')
+        q = mp.Queue()
+        works_per_worker = 1      # Number of datasets created by one subgraph
+        number_of_worker = 20     # Number of process -> 
+
+        for i in range(0, len(flist), works_per_worker):
+            q.put(i)
+        workers = []
+
+        path = "common/data/merge/"
+        for i in range(number_of_worker) : 
+            worker = mp.Process(target=mkDataset, args=(path, flist, q, works_per_worker))
+            workers.append(worker)
+            worker.start()
+
+        for worker in workers:
+            worker.join()
+        
+        print(dataset[:10])
+        print(len(dataset))
+        sys.exit()
+
         return dataset
+
+
+
+    # elif name == "scene":
+    #     dataset = [[], [], []]
+    #     loadstart_data = time.time()
+    #     for filename in os.listdir('common/data/v3_x1006/'):
+    #         print("foldername : ",filename)
+    #         with open("common/data/v3_x1006/"+"/"+filename, "rb") as fr:
+    #             tmp = pickle.load(fr)
+    #             print(filename)
+    #             for i in range(0, len(tmp[0]), 64):
+    #                 print(i)
+    #                 dataset[0].append(tmp[0][i])
+    #                 dataset[1].append(tmp[1][i])
+    #                 dataset[2].append(tmp[2][i])
+    #     loadend_data = time.time()                
+
+    #     print("load time _data.py : ", loadend_data - loadstart_data)
+
+    #     return dataset
 
     if task == "graph":
         train_len = int(0.8 * len(dataset))
@@ -137,6 +267,8 @@ class SceneDataSource(DataSource):
             l1.append(self.dataset[0][i:i+batch_sizes])
             l2.append(self.dataset[1][i:i+batch_sizes])
             l3.append(self.dataset[2][i:i+batch_sizes])
+            print("i : ",i)
+
 
         return [[a, b, c] for a, b, c in zip(l1, l2, l3)]
 

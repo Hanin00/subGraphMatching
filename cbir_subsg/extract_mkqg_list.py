@@ -16,7 +16,7 @@ import networkx as nx
 
 
 ''''
-    completegraph
+    completegraph / 
 
 
 '''

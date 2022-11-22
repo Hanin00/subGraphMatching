@@ -7,9 +7,11 @@ import random
 
 import time
 import csv
+import sys
 
 
-def make_pkl(dataset, queue, train_num_per_row, max_row_per_worker, train,vNum):
+
+def make_pkl(dataset, queue, train_num_per_row, max_row_per_worker, train, vNum):
     '''Make pickle file(create train dataset)
     Format of one train data is graph1, graph2, ged of graph1 and graph2.
     This process is to create a train dataset from subgraphs.
@@ -37,7 +39,7 @@ def make_pkl(dataset, queue, train_num_per_row, max_row_per_worker, train,vNum):
         if queue.empty():
             break
         num = queue.get()
-        if length-num > max_row_per_worker:
+        if length-num > max_row_per_worker:  
             s = num
             e = num + max_row_per_worker
         else:
@@ -76,7 +78,10 @@ def make_pkl(dataset, queue, train_num_per_row, max_row_per_worker, train,vNum):
                 g1_list.append(dataset[i])
                 g2_list.append(dataset[r])
                 ged_list.append(d)
-
+        print(len(g1_list))
+        print(len(g2_list))
+        print(len(ged_list))    # 1일 때 1088
+        sys.exit()
         with open("common/data/v3_x100{}/{}_{}.pickle".format(vNum,s, e), "wb") as fw:
             pickle.dump([g1_list, g2_list, ged_list], fw)
         g1_list = []
@@ -99,10 +104,10 @@ def main(train):
     # vNumList = [3,2,0,8,1,4,9,7,6] # gpu 7에서 2,0번 시작함 gpu8번에서 3, gpu 6번에서 8
     vNumList = [6]
     for vNum in vNumList : 
-        # with open("data/DatasetVer3/v3_x100{}.pickle".format(vNum), "rb") as fr
-            
-        with open("data/query_sub_1028.pickle".format(vNum), "rb") as fr:
+        with open("data/DatasetVer3/v3_x100{}.pickle".format(vNum), "rb") as fr:
+        # with open("data/query_sub_1028.pickle".format(vNum), "rb") as fr:
             dataset = pickle.load(fr)
+            # dataset = dataset[:1]
 
         total = []
         # total_class = set()
@@ -116,16 +121,14 @@ def main(train):
             # idx2.append(len(subs))
             # total_class |= {v for idx, v in dataset[i].nodes(data='name')}
             total.extend(subs)
-        with open("common/data/query_sub/query_sub_1028.pkl".format(vNum), 'wb') as f:
-            pickle.dump(total, f, pickle.HIGHEST_PROTOCOL)   
+            
+        # with open("common/data/query_sub/query_sub_1028.pkl".format(vNum), 'wb') as f:
+        #     pickle.dump(total, f, pickle.HIGHEST_PROTOCOL)   
         # with open("common/data/v3_x100{}/subs.pkl".format(vNum), 'wb') as f:
         #     pickle.dump(total, f, pickle.HIGHEST_PROTOCOL)   
         # with open('common/data/v3_x100{}/subs.pkl'.format(vNum), 'rb') as f:
         #     data = pickle.load(f)
         #     print(len(data))
-    
-
-        sys.exit() 
 
 
         # # print("class 수 :",len(total_class))
@@ -158,7 +161,7 @@ def main(train):
 
         with open("common/data/v3_x100{}/.csv".format(vNum), 'w') as file:
             writer = csv.writer(file)
-            writer.writerow(tiems)
+            writer.writerow(times)
         
 
 if __name__ == "__main__":
