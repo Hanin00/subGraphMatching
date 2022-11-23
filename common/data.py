@@ -30,7 +30,54 @@ from astar_ged.src.distance import ged, normalized_ged
 import time
 import sys
 import multiprocessing as mp
+
+from multiprocessing import Pool, Process, Manager, Array
  
+
+def mkDatasetInFile(data, s, works) :  
+    # dataPath = path + flist[q2.get()+idx] # datapath
+    dataset = [[], [], []]
+    # dataset = [[], [], []]
+    # s = q2.get()
+    e = s + works
+    print("s : ", s)
+    print("e : ", e)
+    for i in range(s, e):
+        print("i : ", i)
+        try :
+            dataset[0].append(data[0][i])
+            dataset[1].append(data[1][i])
+            dataset[2].append(data[2][i])
+        except : 
+            break
+        # print("dataset : ")
+        # print(dataset[:10])
+        # print(len(dataset))
+    return dataset
+
+def mkDataset2(path,flist, q, max_row_per_worker) : 
+    for idx in range(max_row_per_worker) :     
+        dataPath = path + flist[q.get()+idx] # datapath
+        print("dataPath : ",dataPath)
+        with open(dataPath, "rb") as fr:
+            tmp = pickle.load(fr)
+        # totalNum = len(tmp) 
+        q2 = mp.Queue()
+        workerNum = 40  # 프로세서 개수
+        works = 64      # 프로세서 하나 당 처리해야 하는 데이터 수
+        
+        for i in range(0, len(tmp), works) : 
+            q2.put(i)
+
+        workers2 = []
+        for i in range(workerNum) : 
+            worker2 = mp.Process(target = mkDatasetInFile, args = (data, q2, works))
+            workers2.append(worker2)
+            worker2.start()
+        for worker2 in workers2 : 
+            worker2.join()
+        return dataset
+
 def mkDataset(path,flist, q, max_row_per_worker) : 
     dataset = [[], [], []]
     for idx in range(max_row_per_worker) :     
@@ -38,11 +85,10 @@ def mkDataset(path,flist, q, max_row_per_worker) :
         print("dataPath : ",dataPath)
         with open(dataPath, "rb") as fr:
             tmp = pickle.load(fr)
-            for i in range(0, len(tmp[0])):
+            for i in range(0, len(tmp[0]), 64):
                 dataset[0].append(tmp[0][i])
                 dataset[1].append(tmp[1][i])
                 dataset[2].append(tmp[2][i])
-
     return dataset
 
 def load_dataset(name):
@@ -174,37 +220,91 @@ def load_dataset(name):
                     #         dataset[2].append(tmp[2][i])
     #일단 6만번대 데이터dptj 100개 데이터에 대해서만 gpu 프로세싱 붙여보기
     #이 부분 불러들이는 것도 멀티 프로세싱..
-    elif name == "scene":
-        dataset = [[], [], []]
+    elif name == "scene" :
+
         loadstart_data = time.time()
         flist = os.listdir('common/data/merge/')
-
-        flist = flist[:10]
-
+        #단일 파일 내에서.
         # flist 내에서 구간을 나눠서 처리할 수 있도록
         mp.set_start_method('spawn')
         q = mp.Queue()
-        works_per_worker = 1      # Number of datasets created by one subgraph
+        # manager = Manager()
+        # datasetGlb = manager.list()
+        datasetGlb = Array('i',range(3))
+        works_per_worker = 64      # Number of datasets created by one subgraph
         number_of_worker = 20     # Number of process -> 
 
-        for i in range(0, len(flist), works_per_worker):
+
+        # for filename in range(len)
+
+        # path = "common/data/merge/"+flist[0]
+        path = "common/data/trainDataset/v3_x1003/0_64.pickle"
+        print("dataPath : ",path)
+        with open(path, "rb") as fr:
+            tmp = pickle.load(fr)
+            # print("len(tmp) : ", len(tmp))
+
+        dataset = [[],[],[]]
+        for i in range(0, len(tmp[0]), works_per_worker):
             q.put(i)
         workers = []
-
-        path = "common/data/merge/"
+        p = Pool(number_of_worker)
         for i in range(number_of_worker) : 
-            worker = mp.Process(target=mkDataset, args=(path, flist, q, works_per_worker))
-            workers.append(worker)
-            worker.start()
+            s = q.get()
+            ret = p.apply_async(mkDatasetInFile,(tmp, s, works_per_worker))
 
-        for worker in workers:
-            worker.join()
+            # print("여기 : ",ret.get())
+            dataset = list(map(list.__add__, dataset, ret.get()))
+        p.close()
+        p.join()
+
+        loadend_data = time.time()                
+
+        print("load time _data.py : ", loadend_data - loadstart_data)
+            # worker = mp.Process(target=mkDatasetInFile, args=(tmp, q, works_per_worker, datasetGlb))
+            # # worker = mp.Process(target=mkDataset, args=(path, flist, q, works_per_worker))
+            # workers.append(worker)
+            # worker.start()
+            # worker.join()
+        # 병렬로 불러 들임
+
+        # for worker in workers:
+        #     worker.join()
         
-        print(dataset[:10])
-        print(len(dataset))
-        sys.exit()
-
         return dataset
+    # elif name == "scene":
+    #     dataset = [[], [], []]
+    #     loadstart_data = time.time()
+    #     flist = os.listdir('common/data/merge/')
+
+    #     flist = flist[:10]
+
+    #     # flist 내에서 구간을 나눠서 처리할 수 있도록
+    #     mp.set_start_method('spawn')
+    #     q = mp.Queue()
+    #     works_per_worker = 64      # Number of datasets created by one subgraph
+    #     number_of_worker = 20     # Number of process -> 
+
+    #     for i in range(0, len(flist), works_per_worker):
+    #         q.put(i)
+    #     workers = []
+
+    #     path = "common/data/merge/"
+    #     for i in range(number_of_worker) : 
+    #         worker = mp.Process(target=mkDataset2, args=(path, flist, q, works_per_worker))
+    #         # worker = mp.Process(target=mkDataset, args=(path, flist, q, works_per_worker))
+    #         workers.append(worker)
+    #         worker.start()
+    #     # 병렬로 불러 들임
+
+    #     for worker in workers:
+    #         worker.join()
+        
+    #     print(dataset[:10])
+    #     print(len(dataset))
+    #     sys.exit()
+
+    #     return dataset
 
 
 
@@ -268,7 +368,6 @@ class SceneDataSource(DataSource):
             l2.append(self.dataset[1][i:i+batch_sizes])
             l3.append(self.dataset[2][i:i+batch_sizes])
             print("i : ",i)
-
 
         return [[a, b, c] for a, b, c in zip(l1, l2, l3)]
 
