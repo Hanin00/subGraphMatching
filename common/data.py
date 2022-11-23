@@ -235,12 +235,14 @@ def load_dataset(name):
         number_of_worker = 20     # Number of process -> 
 
 
-        path = "common/data/merge/"+flist[0]
-        # path = "common/data/trainDataset/v3_x1003/0_64.pickle"
+        # for filename in range(len)
+
+        # path = "common/data/merge/"+flist[0]
+        path = "common/data/trainDataset/v3_x1003/0_64.pickle"
         print("dataPath : ",path)
         with open(path, "rb") as fr:
             tmp = pickle.load(fr)
-            print("len(tmp) : ", len(tmp))
+            # print("len(tmp) : ", len(tmp))
 
         dataset = [[],[],[]]
         for i in range(0, len(tmp[0]), works_per_worker):
@@ -251,11 +253,11 @@ def load_dataset(name):
             s = q.get()
             ret = p.apply_async(mkDatasetInFile,(tmp, s, works_per_worker))
 
-            print("여기 : ",ret.get())
+            # print("여기 : ",ret.get())
             dataset = list(map(list.__add__, dataset, ret.get()))
         p.close()
         p.join()
-        
+
         loadend_data = time.time()                
 
         print("load time _data.py : ", loadend_data - loadstart_data)
@@ -366,7 +368,6 @@ class SceneDataSource(DataSource):
             l2.append(self.dataset[1][i:i+batch_sizes])
             l3.append(self.dataset[2][i:i+batch_sizes])
             print("i : ",i)
-
 
         return [[a, b, c] for a, b, c in zip(l1, l2, l3)]
 
