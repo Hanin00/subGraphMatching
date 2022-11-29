@@ -13,8 +13,9 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
-from torch_geometric.data import DataLoader
+# from torch_geometric.data import DataLoader
 from torch.utils.data import DataLoader as TorchDataLoader
+from torch.utils.data import Dataset, random_split
 import torch.utils.data as data
 from torch_geometric.datasets import TUDataset, PPI, QM9, Planetoid
 import torch_geometric.utils as pyg_utils
@@ -23,19 +24,35 @@ from tqdm import tqdm
 import queue
 import scipy.stats as stats
 
-from common import utils
+from common import ha_utils as utils
 
 from astar_ged.src.distance import ged, normalized_ged
 
 import time
 import sys
-import multiprocessing as mp
-
-from multiprocessing import Pool, Process, Manager, Array
+# from multiprocessing import Pool, Process, Manager, Array
+from torch.multiprocessing import Pool, Process, Manager, Array
  
 
+
+
+def mkDataset(fName) :  
+    # dataPath = patha + flist[q2.get()+idx] # datapath
+    dataPath = 'common/data/merge/'+fName
+    with open(dataPath, "rb") as fr:
+        tmp = pickle.load(fr)
+    dataset = [[], [], []]
+    for i in range(0, len(tmp[0]), 64):
+        dataset[0].append(tmp[0][i])
+        dataset[1].append(tmp[1][i])
+        dataset[2].append(tmp[2][i])
+
+    return dataset
+
+
+
 def mkDatasetInFile(data, s, works) :  
-    # dataPath = path + flist[q2.get()+idx] # datapath
+    # dataPath = patha + flist[q2.get()+idx] # datapath
     dataset = [[], [], []]
     e = s + works
     print("s : ", s)
@@ -44,7 +61,7 @@ def mkDatasetInFile(data, s, works) :
         # print("i : ", i)
         try :
             dataset[0].append(data[0][i])
-            dataset[1].append(data[1][i])
+            dataset[1].append(dat[1][i])
             dataset[2].append(data[2][i])
         except : 
             break
@@ -70,7 +87,6 @@ def mkDataset2(path,flist, s, max_row_per_worker) :
         p2 = Pool(workerNum)
         for i in range(workerNum) : 
             print(s2)
-            sys.exit()
             s2 = q2.get()
             ret2 = p2.apply_async(mkDatasetInFile,(tmp2, s2, workerNum))
              # print("여기 : ",ret.get())
@@ -83,23 +99,25 @@ def mkDataset2(path,flist, s, max_row_per_worker) :
 
         return dataset
 
-def mkDataset(path,flist, s, max_row_per_worker) : 
-    dataset = [[], [], []]
-    # dataset = list(dataset)
-    # random.shuffle(dataset)
-    for idx in range(max_row_per_worker) :     
-        # dataPath = path + flist[q.get()+idx] # datapath
-        dataPath = path + flist[s+idx] # datapath
-        print("dataPath : ",dataPath)
-        with open(dataPath, "rb") as fr:
-            tmp = pickle.load(fr)
-            for i in range(0, len(tmp[0]), 64):
-                dataset[0].append(tmp[0][i])
-                dataset[1].append(tmp[1][i])
-                dataset[2].append(tmp[2][i])
-    return dataset
+# def mkDataset(path,flist, s, max_row_per_worker, seed=None) : 
+#     dataset = [[], [], []]
+#     # dataset = list(dataset)
+#     # random.shuffle(dataset)
+#     # if seed is not None:
+#     # random.seed(seed)
+#     for idx in range(max_row_per_worker) :     
+#         # dataPath = path + flist[q.get()+idx] # datapath
+#         dataPath = path + flist[s+idx] # datapath
+#         print("dataPath : ",dataPath)
+#         with open(dataPath, "rb") as fr:
+#             tmp = pickle.load(fr)
+#             for i in range(0, len(tmp[0]), 64):
+#                 dataset[0].append(tmp[0][i])
+#                 dataset[1].append(tmp[1][i])
+#                 dataset[2].append(tmp[2][i])
+#     return dataset
 
-def load_dataset(name):
+def load_dataset(name): 
     """ Load real-world datasets, available in PyTorch Geometric.
 
     Used as a helper for DiskDataSource.
@@ -128,59 +146,92 @@ def load_dataset(name):
         dataset = QM9(root="/tmp/QM9")
     elif name == "atlas":
         dataset = [g for g in nx.graph_atlas_g()[1:] if nx.is_connected(g)]
+    
 
+    elif name == "_scene" : 
+        start = time.time()
+        flist = os.listdir('common/data/merge/')
+        dataset = [[],[],[]]   
+        flist = flist[0]
+        path = "common/data/merge/"
+        dataPath = path+flist
+        with open(dataPath, "rb") as fr:
+            tmp = pickle.load(fr)
+            for i in range(0, len(tmp[0]), 64):
+                dataset[0].append(tmp[0][i])
+                dataset[1].append(tmp[1][i])
+                dataset[2].append(tmp[2][i])
+        # for fName in flist : 
+        #     path = "common/data/merge/"
+        #     dataPath = path+fName
+        #     with open(dataPath, "rb") as fr:
+        #         tmp = pickle.load(fr)
+        #         for i in range(0, len(tmp[0]), 64):
+        #             dataset[0].append(tmp[0][i])
+        #             dataset[1].append(tmp[1][i])
+        #             dataset[2].append(tmp[2][i])
+
+        end = time.time()
+        print("load time : ", end-start)    
+        return dataset
+            
     elif name == "scene" :
-        
+# https://m.blog.naver.com/PostView.naver?isHttpsRedirect=true&blogId=parkjy76&logNo=221089918474
         loadstart_data = time.time()
         flist = os.listdir('common/data/merge/')
-        flist = flist[:1]
+        flist = flist[:3]
+        path = 'common/data/merge/'
+        # flist = flist[:1]  # 건당 15-16초 정도 걸리는데, 늦어지는 건, multiprocessing 중간에 오류 있어서 그런 듯
 
         # flist 내에서 구간을 나눠서 처리할 수 있도록
         mp.set_start_method('spawn')
-        q = mp.Queue()
-        number_of_worker = 10     # Number of proces/  -> 
-        works_per_worker = len(flist)//number_of_worker      # Number of datasets created by one subgraph
-        
-        for i in range(0, len(flist), number_of_worker):
-            q.put(i)
+        pool = mp.Pool(processes = 4)
+        dataset = pool.map(mkDataset, flist) #폴더 내 여러 파일에 대해 병렬로 읽는 작업 O
+        # -> 한 파일 내 병렬로 쪼개서 읽는 것 X
+        def collect_result(result):
+            results.append(result)
 
-        dataset = [[],[],[]]    
-        workers = [] 
-        p = Pool(number_of_worker)
-        path = "common/data/merge/"
-        dataPath = path+flist[0]
-        with open(dataPath, "rb") as fr:
-            tmp = pickle.load(fr)
+        # map_async
+        pool.map_async(worker, jobs, callback=collect_result)
+
+
+
+
+        pool.close()
+        pool.join()
+        print(len(dataset))
+        print(dataset[0][0])
+        print(dataset[1][0])
+        print(dataset[2][0])
+
+        print(len(dataset[0][0]))
+        print(len(dataset[1][0]))
+        print(len(dataset[2][0]))
+
+        sys.exit()
+
+
+
+
+
         
-        for i in range(number_of_worker) : 
-            s = q.get()
-            # ret = p.apply_async(mkDataset,(path, flist, s, works_per_worker))
-            ret = p.apply_async(mkDatasetInFile,(tmp, s, len(tmp[0])//number_of_worker))
-            dataset = list(map(list.__add__, dataset, ret.get()))
-        p.close()
-        p.join()
+        # dataset = [[],[],[]]    
+        # workers = [] 
+        # p = Pool(number_of_worker)sfd
+        # path = "common/data/merge/"
+        # dataPath = path+flist[0]
+        # with open(dataPath, "rb") as fr:
+        #     tmp = pickle.load(fr)
+        
+        # for i in range(number_of_worker) : 
+        #     s = q.get()
+        #     # ret = p.apply_async(mkDataset,(path, flist, s, works_per_worker))
+        #     ret = p.apply_async(mkDatasetInFile,(tmp, s, len(tmp[0])//number_of_worker))
+        #     dataset = list(map(list.__add__, dataset, ret.get()))
+        # p.close()
+        # p.join()
 
         return dataset
-
-    # elif name == "scene":
-    #     dataset = [[], [], []]
-    #     loadstart_data = time.time()
-    #     flist = os.listdir('common/data/v3_x1006/')
-    #     flist = flist[:2]
-    #     for filename in flist:
-    #         print("foldername : ",filename)
-    #         with open("common/data/v3_x1006/"+"/"+filename, "rb") as fr:
-    #             tmp = pickle.load(fr)
-    #             print(filename)
-    #             for i in range(0, len(tmp[0]), 64):
-    #                 print(i)
-    #                 dataset[0].append(tmp[0][i])
-    #                 dataset[1].append(tmp[1][i])
-    #                 dataset[2].append(tmp[2][i])
-    #     loadend_data = time.time()                
-    #     print("load time _data.py : ", loadend_data - loadstart_data)
-
-    #     return dataset
 
     if task == "graph":
         train_len = int(0.8 * len(dataset))
@@ -211,6 +262,24 @@ class DataSource:
         raise NotImplementedError
 
 
+'''
+    대용량 데이터 dataset - dataloader 구현
+    - inputdata는 getitem 함수 호출 시 해당 index 의 Input Tensor를 읽어 학습데이터를 동적으로 생성해 Returne
+'''
+class SceneDataset(Dataset) : 
+    def __init__(self, annotations_file, img_dir, transform=None, target_transform=None):
+        self.dataset = load_dataset(dataset_name)
+    def __len__(self) : 
+        return len(self.img_labels)  #
+        
+
+
+
+
+
+
+
+
 class SceneDataSource(DataSource):
     def __init__(self, dataset_name):
         self.dataset = load_dataset(dataset_name)
@@ -226,7 +295,6 @@ class SceneDataSource(DataSource):
         return [[a, b, c] for a, b, c in zip(l1, l2, l3)]
 
     def gen_batch(self, datas, train):
-
         pos_d = datas[2]
         pos_a = utils.batch_nx_graphs(datas[0])
         for i in range(len(datas[1])):
@@ -235,157 +303,6 @@ class SceneDataSource(DataSource):
                 datas[2][i] = 0.0
         pos_b = utils.batch_nx_graphs(datas[1])
         return pos_a, pos_b, pos_d
-
-        # else:
-        #     if len(self.g1)-b > batch_size:
-        #         s = b
-        #         e = b + batch_size
-        #     else:
-        #         s = b
-        #         e = len(self.g1)
-        #     print(len(self.g1))
-        #     print(s)
-        #     print(e)
-        #     pos_a = self.g1[s:e//2]
-        #     pos_b = self.g2[s:e//2]
-        #     pos_d = self.ged[s:e//2]
-        #     neg_a = self.g1[e//2:e]
-        #     neg_b = self.g2[e//2:e]
-        #     neg_d = self.ged[e//2:e]
-        #     print(self.g1[s:e//2])
-        #     print(len(pos_a))
-        #     pos_a = utils.batch_nx_graphs(pos_a)
-        #     pos_b = utils.batch_nx_graphs(pos_b)
-        #     neg_a = utils.batch_nx_graphs(neg_a)
-        #     neg_b = utils.batch_nx_graphs(neg_b)
-
-        #     return pos_a, pos_b, neg_a, neg_b, pos_d, neg_d
-
-
-class DiskDataSource(DataSource):
-    """ 
-    Uses a set of graphs saved in a dataset file to train the model.
-
-    At every iteration, new batch of graphs (positive and negative) are generated
-    by sampling subgraphs from a given dataset.
-
-    See the load_dataset function for supported datasets.
-    """
-
-    def __init__(self, dataset_name, node_anchored=False, min_size=5,
-                 max_size=29):
-        self.node_anchored = node_anchored
-        self.dataset = load_dataset(dataset_name)
-        self.min_size = min_size
-        self.max_size = max_size
-
-    def gen_data_loaders(self, size, batch_size, train=True,
-                         use_distributed_sampling=False):
-        loaders = [[batch_size]*(size // batch_size) for i in range(3)]
-        return loaders
-
-    def gen_batch(self, a, b, c, train, max_size=10, min_size=2, seed=None,
-                  filter_negs=False, sample_method="tree-pair"):
-        batch_size = a
-        train_set, test_set, task = self.dataset
-        graphs = train_set if train else test_set
-
-        if seed is not None:
-            random.seed(seed)
-
-        pos_a, pos_b, pos_label = [], [], []
-        pos_a_anchors, pos_b_anchors = [], []
-        for i in range(batch_size // 2):
-            if sample_method == "tree-pair":
-                size = random.randint(min_size+1, max_size)
-                # graph : 원 그래프, a : neigh node
-                graph, a = utils.sample_neigh(graphs, size)
-                b = a[:random.randint(min_size, len(a) - 1)]
-            elif sample_method == "subgraph-tree":
-                graph = None
-                while graph is None or len(graph) < min_size + 1:
-                    graph = random.choice(graphs)
-                a = graph.nodes
-                _, b = utils.sample_neigh([graph], random.randint(min_size,
-                                                                  len(graph) - 1))
-
-            if self.node_anchored:
-                anchor = list(graph.nodes)[0]
-                pos_a_anchors.append(anchor)
-                pos_b_anchors.append(anchor)
-
-            neigh_a, neigh_b = graph.subgraph(a), graph.subgraph(b)
-
-            # 신 버전(GED)
-            neigh_a.graph['gid'] = 0
-            neigh_b.graph['gid'] = 1
-            # d = ged(neigh_a, neigh_b, 'astar', debug=False, timeit=False)
-            # d = normalized_ged(d, neigh_a, neigh_b)
-            d = 1
-
-            # 구 버전(GED)
-            # p_tmp = nx.optimize_graph_edit_distance(neigh_a, neigh_b)
-            # for p_i in p_tmp:
-            #     p_label = p_i
-
-            pos_a.append(neigh_a)
-            pos_b.append(neigh_b)
-            pos_label.append(d)
-
-        # print("pos_data finish")
-        neg_a, neg_b, neg_label = [], [], []
-        neg_a_anchors, neg_b_anchors = [], []
-        while len(neg_a) < batch_size // 2:
-            if sample_method == "tree-pair":
-                size = random.randint(min_size+1, max_size)
-                graph_a, a = utils.sample_neigh(graphs, size)
-                graph_b, b = utils.sample_neigh(graphs, random.randint(min_size,
-                                                                       size - 1))
-            elif sample_method == "subgraph-tree":
-                graph_a = None
-                while graph_a is None or len(graph_a) < min_size + 1:
-                    graph_a = random.choice(graphs)
-                a = graph_a.nodes
-                graph_b, b = utils.sample_neigh(graphs, random.randint(min_size,
-                                                                       len(graph_a) - 1))
-            if self.node_anchored:
-                neg_a_anchors.append(list(graph_a.nodes)[0])
-                neg_b_anchors.append(list(graph_b.nodes)[0])
-            neigh_a, neigh_b = graph_a.subgraph(a), graph_b.subgraph(b)
-            if filter_negs:
-                matcher = nx.algorithms.isomorphism.GraphMatcher(
-                    neigh_a, neigh_b)
-                if matcher.subgraph_is_isomorphic():  # a <= b (b is subgraph of a)
-                    continue
-
-            # 신 버전(GED)
-            neigh_a.graph['gid'] = 0
-            neigh_b.graph['gid'] = 1
-            # d = ged(neigh_a, neigh_b, 'astar', debug=False, timeit=False)
-            # d = normalized_ged(d, neigh_a, neigh_b)
-            d = 0
-
-            # 구 버전(GED)
-            # n_tmp = nx.optimize_graph_edit_distance(neigh_a, neigh_b)
-            # for n_i in n_tmp:
-            #     n_label = n_i
-
-            neg_a.append(neigh_a)
-            neg_b.append(neigh_b)
-            neg_label.append(d)
-
-        # print("neg_data finish")
-
-        pos_a = utils.batch_nx_graphs(pos_a, anchors=pos_a_anchors if
-                                      self.node_anchored else None)
-        pos_b = utils.batch_nx_graphs(pos_b, anchors=pos_b_anchors if
-                                      self.node_anchored else None)
-        neg_a = utils.batch_nx_graphs(neg_a, anchors=neg_a_anchors if
-                                      self.node_anchored else None)
-        neg_b = utils.batch_nx_graphs(neg_b, anchors=neg_b_anchors if
-                                      self.node_anchored else None)
-
-        return pos_a, pos_b, neg_a, neg_b, pos_label, neg_label
 
 
 if __name__ == "__main__":
